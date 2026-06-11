@@ -48,8 +48,6 @@ fun ImageLabScreen(viewModel: ImageLabViewModel = koinViewModel()) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Image Lab", style = MaterialTheme.typography.headlineMedium)
-
         if (!state.hasApiKey) {
             Card {
                 Text(

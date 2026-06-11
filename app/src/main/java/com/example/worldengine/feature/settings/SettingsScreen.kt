@@ -33,8 +33,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel()) {
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineMedium)
-
         Card {
             Column(
                 modifier = Modifier.padding(16.dp),
