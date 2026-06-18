@@ -1,12 +1,18 @@
 package com.example.worldengine.core.di
 
+import androidx.room.Room
+import com.example.worldengine.core.data.local.WorldEngineDatabase
+import com.example.worldengine.core.data.prefs.AppPreferencesRepository
 import com.example.worldengine.core.data.prefs.SecureKeyStore
 import com.example.worldengine.core.data.remote.novelai.AuthInterceptor
 import com.example.worldengine.core.data.remote.novelai.NovelAiApi
 import com.example.worldengine.data.repository.ImageGenRepositoryImpl
+import com.example.worldengine.data.repository.WorldRepositoryImpl
 import com.example.worldengine.domain.repository.ImageGenRepository
+import com.example.worldengine.domain.repository.WorldRepository
 import com.example.worldengine.feature.imagelab.ImageLabViewModel
 import com.example.worldengine.feature.settings.SettingsViewModel
+import com.example.worldengine.feature.worlds.WorldsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -22,6 +28,18 @@ import java.util.concurrent.TimeUnit
 val appModule = module {
 
     single { SecureKeyStore(androidContext()) }
+    single { AppPreferencesRepository(androidContext()) }
+
+    // Local database (Room) + DAOs + repositories
+    single {
+        Room.databaseBuilder(
+            androidContext(),
+            WorldEngineDatabase::class.java,
+            WorldEngineDatabase.NAME,
+        ).build()
+    }
+    single { get<WorldEngineDatabase>().worldDao() }
+    single<WorldRepository> { WorldRepositoryImpl(get(), Dispatchers.IO) }
 
     single {
         Json {
@@ -67,5 +85,6 @@ val appModule = module {
     }
 
     viewModel { ImageLabViewModel(get(), get()) }
-    viewModel { SettingsViewModel(get()) }
+    viewModel { SettingsViewModel(get(), get()) }
+    viewModel { WorldsViewModel(get()) }
 }

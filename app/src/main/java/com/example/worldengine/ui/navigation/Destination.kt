@@ -24,7 +24,7 @@ enum class Destination(
     val implemented: Boolean,
 ) {
     ImageLab("Image Lab", Icons.Default.AutoAwesome, implemented = true),
-    Worlds("Worlds", Icons.Default.Public, implemented = false),
+    Worlds("Worlds", Icons.Default.Public, implemented = true),
     Characters("Characters", Icons.Default.Groups, implemented = false),
     Timeline("Timeline", Icons.Default.Timeline, implemented = false),
     Relationships("Relationships", Icons.Default.AccountTree, implemented = false),

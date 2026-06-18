@@ -32,21 +32,40 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.worldengine.core.data.prefs.AppPreferencesRepository
+import com.example.worldengine.domain.model.AppPreferences
 import com.example.worldengine.feature.imagelab.ImageLabScreen
 import com.example.worldengine.feature.imagelab.ImageLabViewModel
 import com.example.worldengine.feature.settings.SettingsScreen
+import com.example.worldengine.feature.worlds.WorldsScreen
 import com.example.worldengine.ui.components.PlaceholderScreen
 import com.example.worldengine.ui.navigation.Destination
 import com.example.worldengine.ui.theme.WorldEngineTheme
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
+/**
+  Built on the JCU CP3406/CP5307 utility-app starter template: this began as the
+  template's single-Activity Jetpack Compose + Material 3 setup with a [Scaffold]. I changed the template's
+  bottom [androidx.compose.material3.NavigationBar] (Utility/Settings tabs)
+   into a [ModalNavigationDrawer] (burger menu) so the app can scale to more many planned
+  sections (that would be useful for myself given I do actually
+  want to use the app for myself), and the colour/typography theme in `ui/theme` is carried over from the template.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            WorldEngineTheme {
+            val preferencesRepository = koinInject<AppPreferencesRepository>()
+            val preferences by preferencesRepository.preferences
+                .collectAsStateWithLifecycle(initialValue = AppPreferences())
+            WorldEngineTheme(
+                themeMode = preferences.themeMode,
+                fontScale = preferences.fontSize.scale,
+            ) {
                 WorldEngineRoot()
             }
         }
@@ -111,6 +130,7 @@ fun WorldEngineRoot() {
             Box(modifier = Modifier.padding(innerPadding)) {
                 when (current) {
                     Destination.ImageLab -> ImageLabScreen(imageLabViewModel)
+                    Destination.Worlds -> WorldsScreen()
                     Destination.Settings -> SettingsScreen()
                     else -> PlaceholderScreen(current.label)
                 }
