@@ -40,7 +40,10 @@ import java.text.DateFormat
 import java.util.Date
 
 @Composable
-fun WorldsScreen(viewModel: WorldsViewModel = koinViewModel()) {
+fun WorldsScreen(
+    onOpenWorld: (Long) -> Unit,
+    viewModel: WorldsViewModel = koinViewModel(),
+) {
     val worlds by viewModel.worlds.collectAsStateWithLifecycle()
     val editing by viewModel.editing.collectAsStateWithLifecycle()
 
@@ -56,6 +59,7 @@ fun WorldsScreen(viewModel: WorldsViewModel = koinViewModel()) {
                 items(worlds, key = { it.id }) { world ->
                     WorldCard(
                         world = world,
+                        onOpen = { onOpenWorld(world.id) },
                         onEdit = { viewModel.startEdit(world) },
                         onDelete = { viewModel.delete(world) },
                     )
@@ -99,8 +103,8 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun WorldCard(world: World, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun WorldCard(world: World, onOpen: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,

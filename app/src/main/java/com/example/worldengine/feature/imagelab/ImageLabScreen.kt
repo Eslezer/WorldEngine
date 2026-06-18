@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.worldengine.domain.model.ImageModel
@@ -40,6 +42,9 @@ import kotlin.math.roundToInt
 @Composable
 fun ImageLabScreen(viewModel: ImageLabViewModel = koinViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Refresh the API-key gate when returning here (e.g. after saving a key in Settings).
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshKeyState() }
 
     Column(
         modifier = Modifier
@@ -83,6 +88,58 @@ fun ImageLabScreen(viewModel: ImageLabViewModel = koinViewModel()) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (state.status == GenStatus.Loading) "Generating…" else "Generate")
+        }
+
+        AssignPortraitSection(state, viewModel)
+    }
+}
+
+/**
+ * Lets the user attach the most recent generation to a character as their profile picture. This is
+ * the intended Image-Gen ↔ Characters bridge: portraits are produced here and pushed onto a chosen
+ * character, rather than being generated from inside the character editor. Hidden until there is an
+ * image to assign and at least one character to assign it to.
+ */
+@Composable
+private fun AssignPortraitSection(state: ImageLabUiState, viewModel: ImageLabViewModel) {
+    if (state.latestImagePath == null || state.characters.isEmpty()) return
+
+    Card {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Use as character portrait", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Assign the image above as the profile picture of a character in one of your worlds.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            val selected = state.characters.firstOrNull { it.id == state.selectedCharacterId }
+                ?: state.characters.first()
+            LabeledDropdown(
+                label = "Character",
+                options = state.characters,
+                selected = selected,
+                optionLabel = { it.label },
+                onSelected = { viewModel.onCharacterSelected(it.id) },
+            )
+
+            Button(
+                onClick = viewModel::assignLatestToCharacter,
+                enabled = state.canAssignPortrait,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Set as profile picture")
+            }
+
+            state.assignMessage?.let {
+                Text(
+                    it,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }
