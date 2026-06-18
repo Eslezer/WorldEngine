@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.worldengine.domain.model.Character
+import com.example.worldengine.feature.timeline.TimelineSection
 import com.example.worldengine.ui.components.PlaceholderScreen
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -83,6 +84,7 @@ fun WorldDetailScreen(
                     onOpenCharacter = onOpenCharacter,
                     onDeleteCharacter = viewModel::deleteCharacter,
                 )
+                WorldSection.Timeline -> TimelineSection(worldId = worldId)
                 else -> PlaceholderScreen("${section.label} — inside ${world?.name ?: "this world"}")
             }
         }

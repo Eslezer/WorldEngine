@@ -8,13 +8,16 @@ import com.example.worldengine.core.data.remote.novelai.AuthInterceptor
 import com.example.worldengine.core.data.remote.novelai.NovelAiApi
 import com.example.worldengine.data.repository.CharacterRepositoryImpl
 import com.example.worldengine.data.repository.ImageGenRepositoryImpl
+import com.example.worldengine.data.repository.TimelineRepositoryImpl
 import com.example.worldengine.data.repository.WorldRepositoryImpl
 import com.example.worldengine.domain.repository.CharacterRepository
 import com.example.worldengine.domain.repository.ImageGenRepository
+import com.example.worldengine.domain.repository.TimelineRepository
 import com.example.worldengine.domain.repository.WorldRepository
 import com.example.worldengine.feature.characters.CharacterEditorViewModel
 import com.example.worldengine.feature.imagelab.ImageLabViewModel
 import com.example.worldengine.feature.settings.SettingsViewModel
+import com.example.worldengine.feature.timeline.TimelineViewModel
 import com.example.worldengine.feature.worlds.WorldDetailViewModel
 import com.example.worldengine.feature.worlds.WorldsViewModel
 import kotlinx.coroutines.Dispatchers
@@ -46,8 +49,10 @@ val appModule = module {
     }
     single { get<WorldEngineDatabase>().worldDao() }
     single { get<WorldEngineDatabase>().characterDao() }
+    single { get<WorldEngineDatabase>().timelineEventDao() }
     single<WorldRepository> { WorldRepositoryImpl(get(), Dispatchers.IO) }
     single<CharacterRepository> { CharacterRepositoryImpl(get(), Dispatchers.IO) }
+    single<TimelineRepository> { TimelineRepositoryImpl(get(), Dispatchers.IO) }
 
     single {
         Json {
@@ -97,6 +102,7 @@ val appModule = module {
     viewModel { SettingsViewModel(get(), get()) }
     viewModel { WorldsViewModel(get()) }
     viewModel { (worldId: Long) -> WorldDetailViewModel(worldId, get(), get()) }
+    viewModel { (worldId: Long) -> TimelineViewModel(worldId, get(), get()) }
     viewModel { (worldId: Long, characterId: Long) ->
         CharacterEditorViewModel(worldId, characterId, get())
     }
