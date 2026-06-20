@@ -58,6 +58,7 @@ fun TimelineSection(
 ) {
     val events by viewModel.events.collectAsStateWithLifecycle()
     val characters by viewModel.characters.collectAsStateWithLifecycle()
+    val calendars by viewModel.calendars.collectAsStateWithLifecycle()
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
     val newestFirst by viewModel.newestFirst.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
@@ -106,6 +107,7 @@ fun TimelineSection(
         EventEditorDialog(
             draft = it,
             characters = characters,
+            calendars = calendars,
             onNameChange = viewModel::onNameChange,
             onDateChange = viewModel::onDateChange,
             onSortKeyChange = viewModel::onSortKeyChange,
@@ -113,6 +115,10 @@ fun TimelineSection(
             onCharacterSelect = viewModel::onCharacterSelect,
             onLocationChange = viewModel::onLocationChange,
             onDurationChange = viewModel::onDurationChange,
+            onCalendarSelect = viewModel::onCalendarSelect,
+            onStartComponentChange = viewModel::onStartComponentChange,
+            onEndComponentChange = viewModel::onEndComponentChange,
+            onPeriodChange = viewModel::setPeriod,
             onSave = viewModel::save,
             onDismiss = viewModel::dismissDraft,
         )
@@ -286,8 +292,13 @@ private fun EventCard(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
+                    val dateText = if (event.isPeriod && event.endDateLabel != null) {
+                        "${event.dateLabel}  →  ${event.endDateLabel}"
+                    } else {
+                        event.dateLabel
+                    }
                     Text(
-                        event.dateLabel,
+                        dateText,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )

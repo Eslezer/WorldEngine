@@ -9,6 +9,10 @@ object Routes {
     const val WORLDS = "worlds"
     const val SETTINGS = "settings"
 
+    /** Global managers reached from Settings (not top-level bottom-bar sections). */
+    const val CALENDARS = "calendars"
+    const val RELATIONSHIP_TYPES = "relationship_types"
+
     const val WORLD_DETAIL = "world/{worldId}"
     const val CHARACTER_EDITOR = "world/{worldId}/character/{characterId}"
 

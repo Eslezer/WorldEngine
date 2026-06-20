@@ -40,4 +40,10 @@ data class TimelineEventEntity(
     val location: String,
     val duration: String,
     val createdAt: Long,
+    /** Id of the custom calendar used to enter this date, or null for a freeform date. */
+    val calendarId: String? = null,
+    /** End-of-period ordering value; null means the event is a single point in time, not a span. */
+    val endSortKey: Long? = null,
+    /** Display label for the end of a period (e.g. a war's end), or null when there is no end. */
+    val endDateLabel: String? = null,
 )

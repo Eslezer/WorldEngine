@@ -22,4 +22,13 @@ data class TimelineEvent(
     val location: String = "",
     val duration: String = "",
     val createdAt: Long = 0,
-)
+    /** Custom calendar this date was entered with, or null for a freeform date. See [CustomCalendar]. */
+    val calendarId: String? = null,
+    /** End ordering value for a period/span (e.g. a war). null = single point in time. */
+    val endSortKey: Long? = null,
+    /** Display label for the end of a period, or null when the event has no end. */
+    val endDateLabel: String? = null,
+) {
+    /** True when this event spans a period rather than a single instant. */
+    val isPeriod: Boolean get() = endSortKey != null
+}

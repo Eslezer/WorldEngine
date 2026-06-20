@@ -27,7 +27,11 @@ import com.example.worldengine.domain.model.ThemeMode
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel()) {
+fun SettingsScreen(
+    onManageCalendars: () -> Unit = {},
+    onManageRelationshipTypes: () -> Unit = {},
+    viewModel: SettingsViewModel = koinViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(
@@ -44,7 +48,37 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel()) {
             onFontSizeChange = viewModel::setFontSize,
         )
 
+        ManagerCard(
+            title = "Custom calendars",
+            description = "Define your own date systems (e.g. a fantasy calendar) once and reuse them " +
+                "across all worlds when dating timeline events.",
+            buttonText = "Manage calendars",
+            onClick = onManageCalendars,
+        )
+
+        ManagerCard(
+            title = "Custom relationship types",
+            description = "Create named relationship types on top of built-in templates (e.g. a " +
+                "custom \"Sire / Childe\" based on \"Parent of\"), reusable across all worlds.",
+            buttonText = "Manage relationship types",
+            onClick = onManageRelationshipTypes,
+        )
+
         ApiKeyCard(state, viewModel)
+    }
+}
+
+@Composable
+private fun ManagerCard(title: String, description: String, buttonText: String, onClick: () -> Unit) {
+    Card {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(description, style = MaterialTheme.typography.bodySmall)
+            Button(onClick = onClick) { Text(buttonText) }
+        }
     }
 }
 

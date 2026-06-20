@@ -29,8 +29,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.worldengine.core.data.prefs.AppPreferencesRepository
 import com.example.worldengine.domain.model.AppPreferences
+import com.example.worldengine.feature.calendars.CalendarsScreen
 import com.example.worldengine.feature.characters.CharacterEditorScreen
 import com.example.worldengine.feature.imagelab.ImageLabScreen
+import com.example.worldengine.feature.relationships.RelationshipTypesScreen
 import com.example.worldengine.feature.settings.SettingsScreen
 import com.example.worldengine.feature.worlds.WorldDetailScreen
 import com.example.worldengine.feature.worlds.WorldsScreen
@@ -164,7 +166,15 @@ fun WorldEngineRoot() {
                 )
             }
 
-            composable(Routes.SETTINGS) { SettingsScreen() }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onManageCalendars = { navController.navigate(Routes.CALENDARS) },
+                    onManageRelationshipTypes = { navController.navigate(Routes.RELATIONSHIP_TYPES) },
+                )
+            }
+
+            composable(Routes.CALENDARS) { CalendarsScreen() }
+            composable(Routes.RELATIONSHIP_TYPES) { RelationshipTypesScreen() }
         }
     }
 }
@@ -175,5 +185,7 @@ private fun titleForRoute(route: String?): String = when (route) {
     Routes.SETTINGS -> "Settings"
     Routes.WORLD_DETAIL -> "World"
     Routes.CHARACTER_EDITOR -> "Character"
+    Routes.CALENDARS -> "Custom calendars"
+    Routes.RELATIONSHIP_TYPES -> "Relationship types"
     else -> "World Engine"
 }

@@ -14,6 +14,9 @@ fun TimelineEventEntity.toDomain(): TimelineEvent = TimelineEvent(
     location = location,
     duration = duration,
     createdAt = createdAt,
+    calendarId = calendarId,
+    endSortKey = endSortKey,
+    endDateLabel = endDateLabel,
 )
 
 fun TimelineEvent.toEntity(): TimelineEventEntity = TimelineEventEntity(
@@ -27,4 +30,7 @@ fun TimelineEvent.toEntity(): TimelineEventEntity = TimelineEventEntity(
     location = location,
     duration = duration,
     createdAt = if (createdAt == 0L) System.currentTimeMillis() else createdAt,
+    calendarId = calendarId,
+    endSortKey = endSortKey,
+    endDateLabel = endDateLabel,
 )
