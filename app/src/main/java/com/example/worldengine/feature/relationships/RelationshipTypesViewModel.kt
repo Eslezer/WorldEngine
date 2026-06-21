@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.worldengine.core.data.prefs.RelationshipTypeRepository
 import com.example.worldengine.domain.model.CustomRelationshipType
+import com.example.worldengine.domain.model.RelationshipCategory
+import com.example.worldengine.domain.model.RelationshipStructure
 import com.example.worldengine.domain.model.RelationshipType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +19,8 @@ data class TypeDraft(
     val id: String = "",
     val name: String = "",
     val base: RelationshipType = RelationshipType.FRIEND,
+    val category: RelationshipCategory = base.category,
+    val structure: RelationshipStructure = base.structure,
     val colorArgb: Int? = null,
 ) {
     val canSave: Boolean get() = name.isNotBlank()
@@ -39,13 +43,22 @@ class RelationshipTypesViewModel(
     fun startCreate() { _draft.value = TypeDraft() }
 
     fun startEdit(type: CustomRelationshipType) {
-        _draft.value = TypeDraft(id = type.id, name = type.name, base = type.base, colorArgb = type.colorArgb)
+        _draft.value = TypeDraft(
+            id = type.id,
+            name = type.name,
+            base = type.base,
+            category = type.category,
+            structure = type.structure,
+            colorArgb = type.colorArgb,
+        )
     }
 
     fun dismissDraft() { _draft.value = null }
 
     fun onNameChange(value: String) = updateDraft { it.copy(name = value) }
     fun onBaseChange(base: RelationshipType) = updateDraft { it.copy(base = base) }
+    fun onCategoryChange(category: RelationshipCategory) = updateDraft { it.copy(category = category) }
+    fun onStructureChange(structure: RelationshipStructure) = updateDraft { it.copy(structure = structure) }
     fun onColorChange(colorArgb: Int?) = updateDraft { it.copy(colorArgb = colorArgb) }
 
     fun save() {
@@ -56,6 +69,8 @@ class RelationshipTypesViewModel(
             name = d.name.trim(),
             base = d.base,
             colorArgb = d.colorArgb,
+            category = d.category,
+            structure = d.structure,
         )
         viewModelScope.launch {
             repository.save(type)

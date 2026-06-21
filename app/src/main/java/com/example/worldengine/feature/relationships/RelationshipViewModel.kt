@@ -4,10 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.worldengine.core.data.prefs.RelationshipTypeRepository
 import com.example.worldengine.domain.model.Character
+import com.example.worldengine.domain.model.CharacterLoreLink
 import com.example.worldengine.domain.model.CharacterRelationship
 import com.example.worldengine.domain.model.CustomRelationshipType
+import com.example.worldengine.domain.model.LoreCategory
+import com.example.worldengine.domain.model.LoreEntry
+import com.example.worldengine.domain.model.RelationshipCategory
+import com.example.worldengine.domain.model.RelationshipStructure
 import com.example.worldengine.domain.model.RelationshipType
 import com.example.worldengine.domain.repository.CharacterRepository
+import com.example.worldengine.domain.repository.LoreRepository
 import com.example.worldengine.domain.repository.RelationshipRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,7 +24,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** How the relationship graph is laid out. */
-enum class RelationshipViewMode { Web, Tree, Pyramid }
+enum class RelationshipViewMode(val label: String) {
+    Web("Web"),
+    Familial("Familial"),
+    Factional("Factional"),
+    Social("Social"),
+}
 
 /**
  * A selectable relationship type in the editor: either a built-in [RelationshipType] ([customTypeId]
@@ -28,6 +39,8 @@ data class RelationshipTypeOption(
     val label: String,
     val base: RelationshipType,
     val customTypeId: String?,
+    val category: RelationshipCategory = base.category,
+    val structure: RelationshipStructure = base.structure,
 )
 
 /** Editable form state for the add/edit-relationship dialog. */
@@ -54,6 +67,7 @@ class RelationshipViewModel(
     private val relationshipRepository: RelationshipRepository,
     characterRepository: CharacterRepository,
     relationshipTypeRepository: RelationshipTypeRepository,
+    loreRepository: LoreRepository,
 ) : ViewModel() {
 
     val relationships: StateFlow<List<CharacterRelationship>> =
@@ -66,32 +80,74 @@ class RelationshipViewModel(
     val customTypes: StateFlow<List<CustomRelationshipType>> = relationshipTypeRepository.types
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val loreCategories: StateFlow<List<LoreCategory>> = loreRepository.observeCategories(worldId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val loreEntries: StateFlow<List<LoreEntry>> = loreRepository.observeEntries(worldId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val characterLoreLinks: StateFlow<List<CharacterLoreLink>> = loreRepository.observeCharacterLinks(worldId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Built-in templates plus any custom types, for the editor's type picker. */
     val typeOptions: StateFlow<List<RelationshipTypeOption>> = relationshipTypeRepository.types
         .map { customs ->
             RelationshipType.entries.map { RelationshipTypeOption(it.label, it, null) } +
-                customs.map { RelationshipTypeOption(it.name, it.base, it.id) }
+                customs.map { RelationshipTypeOption(it.name, it.base, it.id, it.category, it.structure) }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), defaultTypeOptions())
 
     private val _viewMode = MutableStateFlow(RelationshipViewMode.Web)
     val viewMode: StateFlow<RelationshipViewMode> = _viewMode.asStateFlow()
 
-    /** When set, the graph centres on this character and shows only its direct relationships. */
-    private val _focusCharacterId = MutableStateFlow<Long?>(null)
-    val focusCharacterId: StateFlow<Long?> = _focusCharacterId.asStateFlow()
+    private val _filterCategoryId = MutableStateFlow<String?>(null)
+    val filterCategoryId: StateFlow<String?> = _filterCategoryId.asStateFlow()
+
+    private val _filterEntryId = MutableStateFlow<Long?>(null)
+    val filterEntryId: StateFlow<Long?> = _filterEntryId.asStateFlow()
 
     private val _draft = MutableStateFlow<RelationshipDraft?>(null)
     val draft: StateFlow<RelationshipDraft?> = _draft.asStateFlow()
 
+    private val _selectedCharacterId = MutableStateFlow<Long?>(null)
+    val selectedCharacterId: StateFlow<Long?> = _selectedCharacterId.asStateFlow()
+
+    private val _centeredCharacterId = MutableStateFlow<Long?>(null)
+    val centeredCharacterId: StateFlow<Long?> = _centeredCharacterId.asStateFlow()
+
+    private val _pendingDelete = MutableStateFlow<CharacterRelationship?>(null)
+    val pendingDelete: StateFlow<CharacterRelationship?> = _pendingDelete.asStateFlow()
+
+    private val _lastDeleted = MutableStateFlow<CharacterRelationship?>(null)
+    val lastDeleted: StateFlow<CharacterRelationship?> = _lastDeleted.asStateFlow()
+
+    init {
+        viewModelScope.launch { loreRepository.ensureDefaultCategories(worldId) }
+    }
+
     fun setViewMode(mode: RelationshipViewMode) { _viewMode.value = mode }
-    fun setFocus(id: Long?) { _focusCharacterId.value = id }
+
+    fun setFilterCategory(id: String?) {
+        _filterCategoryId.value = id
+        _filterEntryId.value = null
+    }
+
+    fun setFilterEntry(id: Long?) {
+        _filterEntryId.value = id
+    }
 
     fun startCreate() {
         val chars = characters.value
         _draft.value = RelationshipDraft(
             fromCharacterId = chars.getOrNull(0)?.id,
             toCharacterId = chars.getOrNull(1)?.id,
+        )
+    }
+
+    fun startCreateBetween(fromCharacterId: Long, toCharacterId: Long) {
+        _draft.value = RelationshipDraft(
+            fromCharacterId = fromCharacterId,
+            toCharacterId = toCharacterId,
         )
     }
 
@@ -107,6 +163,14 @@ class RelationshipViewModel(
     }
 
     fun dismissDraft() { _draft.value = null }
+    fun selectCharacter(id: Long?) {
+        _selectedCharacterId.value = id
+        if (id != null) _centeredCharacterId.value = id
+    }
+
+    fun centerCharacter(id: Long?) {
+        _centeredCharacterId.value = id
+    }
 
     fun onFromSelect(id: Long) = updateDraft { it.copy(fromCharacterId = id) }
     fun onToSelect(id: Long) = updateDraft { it.copy(toCharacterId = id) }
@@ -136,6 +200,31 @@ class RelationshipViewModel(
 
     fun delete(relationship: CharacterRelationship) {
         viewModelScope.launch { relationshipRepository.delete(relationship) }
+    }
+
+    fun askDelete(relationship: CharacterRelationship) {
+        _pendingDelete.value = relationship
+    }
+
+    fun dismissDelete() {
+        _pendingDelete.value = null
+    }
+
+    fun confirmDelete() {
+        val relationship = _pendingDelete.value ?: return
+        viewModelScope.launch {
+            relationshipRepository.delete(relationship)
+            _lastDeleted.value = relationship
+            _pendingDelete.value = null
+        }
+    }
+
+    fun restoreLastDeleted() {
+        val relationship = _lastDeleted.value ?: return
+        viewModelScope.launch {
+            relationshipRepository.save(relationship)
+            _lastDeleted.value = null
+        }
     }
 
     private inline fun updateDraft(transform: (RelationshipDraft) -> RelationshipDraft) {

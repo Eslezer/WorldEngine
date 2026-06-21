@@ -16,10 +16,20 @@ data class CustomRelationshipType(
     val name: String,
     val base: RelationshipType,
     val colorArgb: Int? = null,
+    val category: RelationshipCategory = base.category,
+    val structure: RelationshipStructure = base.structure,
 ) {
-    val direction: RelationshipDirection get() = base.direction
-    val mutual: Boolean get() = base.mutual
-    val hierarchy: HierarchyKind get() = base.hierarchy
+    val direction: RelationshipDirection
+        get() = if (structure == RelationshipStructure.PEER) RelationshipDirection.MUTUAL else RelationshipDirection.ONE_WAY
+    val mutual: Boolean get() = direction == RelationshipDirection.MUTUAL
+    val hierarchy: HierarchyKind get() = category.toHierarchyKind(structure)
     val tone: RelationshipTone get() = base.tone
     val color: Color get() = colorArgb?.let { Color(it) } ?: base.color
+}
+
+fun RelationshipCategory.toHierarchyKind(structure: RelationshipStructure): HierarchyKind = when {
+    structure == RelationshipStructure.PEER -> HierarchyKind.NONE
+    this == RelationshipCategory.FAMILIAL -> HierarchyKind.FAMILY
+    this == RelationshipCategory.FACTIONAL -> HierarchyKind.ORG
+    else -> HierarchyKind.NONE
 }

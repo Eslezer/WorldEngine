@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.worldengine.domain.model.Character
 import com.example.worldengine.domain.model.TimelineEvent
+import com.example.worldengine.domain.model.LoreEntry
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -59,12 +60,21 @@ fun TimelineSection(
     val events by viewModel.events.collectAsStateWithLifecycle()
     val characters by viewModel.characters.collectAsStateWithLifecycle()
     val calendars by viewModel.calendars.collectAsStateWithLifecycle()
+    val loreCategories by viewModel.loreCategories.collectAsStateWithLifecycle()
+    val loreEntries by viewModel.loreEntries.collectAsStateWithLifecycle()
+    val timelineLoreLinks by viewModel.timelineLoreLinks.collectAsStateWithLifecycle()
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
     val newestFirst by viewModel.newestFirst.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
 
     // Character id → name, for showing the attached character on each event.
     val characterNames = remember(characters) { characters.associate { it.id to it.name } }
+    val linkedLoreByEvent = remember(loreEntries, timelineLoreLinks) {
+        val entriesById = loreEntries.associateBy { it.id }
+        timelineLoreLinks
+            .mapNotNull { link -> entriesById[link.loreEntryId]?.let { link.eventId to it } }
+            .groupBy({ it.first }, { it.second })
+    }
     val ordered = remember(events, newestFirst) { if (newestFirst) events.reversed() else events }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -82,12 +92,14 @@ fun TimelineSection(
                 TimelineViewMode.Vertical -> VerticalTimeline(
                     events = ordered,
                     characterNames = characterNames,
+                    linkedLoreByEvent = linkedLoreByEvent,
                     onEdit = viewModel::startEdit,
                     onDelete = viewModel::delete,
                 )
                 TimelineViewMode.Horizontal -> HorizontalTimeline(
                     events = ordered,
                     characterNames = characterNames,
+                    linkedLoreByEvent = linkedLoreByEvent,
                     onEdit = viewModel::startEdit,
                 )
             }
@@ -108,6 +120,8 @@ fun TimelineSection(
             draft = it,
             characters = characters,
             calendars = calendars,
+            loreCategories = loreCategories,
+            loreEntries = loreEntries,
             onNameChange = viewModel::onNameChange,
             onDateChange = viewModel::onDateChange,
             onSortKeyChange = viewModel::onSortKeyChange,
@@ -119,6 +133,7 @@ fun TimelineSection(
             onStartComponentChange = viewModel::onStartComponentChange,
             onEndComponentChange = viewModel::onEndComponentChange,
             onPeriodChange = viewModel::setPeriod,
+            onLoreEntryToggle = viewModel::onLoreEntryToggled,
             onSave = viewModel::save,
             onDismiss = viewModel::dismissDraft,
         )
@@ -178,6 +193,7 @@ private fun EmptyTimeline() {
 private fun VerticalTimeline(
     events: List<TimelineEvent>,
     characterNames: Map<Long, String>,
+    linkedLoreByEvent: Map<Long, List<LoreEntry>>,
     onEdit: (TimelineEvent) -> Unit,
     onDelete: (TimelineEvent) -> Unit,
 ) {
@@ -192,6 +208,7 @@ private fun VerticalTimeline(
                 EventCard(
                     event = event,
                     characterName = characterNames[event.characterId],
+                    linkedLore = linkedLoreByEvent[event.id].orEmpty(),
                     onClick = { onEdit(event) },
                     onDelete = { onDelete(event) },
                     modifier = Modifier
@@ -236,6 +253,7 @@ private fun TimelineRail() {
 private fun HorizontalTimeline(
     events: List<TimelineEvent>,
     characterNames: Map<Long, String>,
+    linkedLoreByEvent: Map<Long, List<LoreEntry>>,
     onEdit: (TimelineEvent) -> Unit,
 ) {
     LazyRow(
@@ -267,6 +285,7 @@ private fun HorizontalTimeline(
                 EventCard(
                     event = event,
                     characterName = characterNames[event.characterId],
+                    linkedLore = linkedLoreByEvent[event.id].orEmpty(),
                     onClick = { onEdit(event) },
                     onDelete = null,
                     modifier = Modifier.padding(end = 16.dp, top = 4.dp),
@@ -284,6 +303,7 @@ private fun HorizontalTimeline(
 private fun EventCard(
     event: TimelineEvent,
     characterName: String?,
+    linkedLore: List<LoreEntry>,
     onClick: () -> Unit,
     onDelete: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -324,6 +344,15 @@ private fun EventCard(
                 Text(
                     meta.joinToString("   "),
                     style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+
+            if (linkedLore.isNotEmpty()) {
+                Text(
+                    linkedLore.take(6).joinToString("   ") { "#${it.title}" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }

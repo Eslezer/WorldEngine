@@ -8,6 +8,20 @@ enum class RelationshipDirection { MUTUAL, ONE_WAY }
 /** Sentiment of a relationship, mapped to a line style in the graph (and shown in the legend). */
 enum class RelationshipTone { POSITIVE, NEUTRAL, HOSTILE }
 
+/** Broad display bucket. Graph modes use this to decide which relationships belong together. */
+enum class RelationshipCategory(val label: String) {
+    FAMILIAL("Familial"),
+    FACTIONAL("Factional"),
+    SOCIAL("Social"),
+}
+
+/** Structural meaning from the first selected character to the second selected character. */
+enum class RelationshipStructure(val label: String) {
+    OVER("X over Y"),
+    PEER("X is like Y"),
+    UNDER("X under Y"),
+}
+
 /**
  * Which hierarchy a one-way link belongs to. [FAMILY] (e.g. Parent of) ranks the **Tree** view;
  * [ORG] (e.g. Superior of) ranks the **Pyramid** view. [NONE] never stacks characters — that covers
@@ -30,16 +44,18 @@ enum class RelationshipType(
     val hierarchy: HierarchyKind,
     val tone: RelationshipTone,
     val color: Color,
+    val category: RelationshipCategory,
+    val structure: RelationshipStructure,
 ) {
-    FRIEND("Friend", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFF4CAF50)),
-    ALLY("Ally", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFF2196F3)),
-    PARTNER("Partner", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFFE91E63)),
-    FAMILY("Family", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFF9C27B0)),
-    PARENT_OF("Parent of", RelationshipDirection.ONE_WAY, HierarchyKind.FAMILY, RelationshipTone.POSITIVE, Color(0xFF7E57C2)),
-    CRUSH("Crush", RelationshipDirection.ONE_WAY, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFFFF4081)),
-    SUPERIOR_OF("Superior of", RelationshipDirection.ONE_WAY, HierarchyKind.ORG, RelationshipTone.NEUTRAL, Color(0xFF607D8B)),
-    RIVAL("Rival", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.HOSTILE, Color(0xFFFF9800)),
-    ENEMY("Enemy", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.HOSTILE, Color(0xFFF44336)),
+    FRIEND("Friend", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFF4CAF50), RelationshipCategory.SOCIAL, RelationshipStructure.PEER),
+    ALLY("Ally", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFF2196F3), RelationshipCategory.SOCIAL, RelationshipStructure.PEER),
+    PARTNER("Partner", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFFE91E63), RelationshipCategory.FAMILIAL, RelationshipStructure.PEER),
+    FAMILY("Family", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFF9C27B0), RelationshipCategory.FAMILIAL, RelationshipStructure.PEER),
+    PARENT_OF("Parent of", RelationshipDirection.ONE_WAY, HierarchyKind.FAMILY, RelationshipTone.POSITIVE, Color(0xFF7E57C2), RelationshipCategory.FAMILIAL, RelationshipStructure.OVER),
+    CRUSH("Crush", RelationshipDirection.ONE_WAY, HierarchyKind.NONE, RelationshipTone.POSITIVE, Color(0xFFFF4081), RelationshipCategory.SOCIAL, RelationshipStructure.UNDER),
+    SUPERIOR_OF("Superior of", RelationshipDirection.ONE_WAY, HierarchyKind.ORG, RelationshipTone.NEUTRAL, Color(0xFF607D8B), RelationshipCategory.FACTIONAL, RelationshipStructure.OVER),
+    RIVAL("Rival", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.HOSTILE, Color(0xFFFF9800), RelationshipCategory.SOCIAL, RelationshipStructure.PEER),
+    ENEMY("Enemy", RelationshipDirection.MUTUAL, HierarchyKind.NONE, RelationshipTone.HOSTILE, Color(0xFFF44336), RelationshipCategory.SOCIAL, RelationshipStructure.PEER),
     ;
 
     /** True for two-way bonds (drawn with arrowheads on both ends). */

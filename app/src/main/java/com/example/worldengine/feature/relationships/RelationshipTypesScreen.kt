@@ -40,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.worldengine.domain.model.CustomRelationshipType
+import com.example.worldengine.domain.model.RelationshipCategory
+import com.example.worldengine.domain.model.RelationshipStructure
 import com.example.worldengine.domain.model.RelationshipType
 import com.example.worldengine.ui.components.LabeledDropdown
 import org.koin.androidx.compose.koinViewModel
@@ -97,6 +99,8 @@ fun RelationshipTypesScreen(viewModel: RelationshipTypesViewModel = koinViewMode
             draft = it,
             onNameChange = viewModel::onNameChange,
             onBaseChange = viewModel::onBaseChange,
+            onCategoryChange = viewModel::onCategoryChange,
+            onStructureChange = viewModel::onStructureChange,
             onColorChange = viewModel::onColorChange,
             onSave = viewModel::save,
             onDismiss = viewModel::dismissDraft,
@@ -121,8 +125,7 @@ private fun TypeCard(type: CustomRelationshipType, onEdit: () -> Unit, onDelete:
             ) {
                 Text(type.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "based on ${type.base.label} · ${if (type.mutual) "mutual" else "one-way"} · " +
-                        type.tone.name.lowercase(),
+                    "${type.category.label} · ${type.structure.label} · style: ${type.base.label}",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -138,6 +141,8 @@ private fun TypeEditorDialog(
     draft: TypeDraft,
     onNameChange: (String) -> Unit,
     onBaseChange: (RelationshipType) -> Unit,
+    onCategoryChange: (RelationshipCategory) -> Unit,
+    onStructureChange: (RelationshipStructure) -> Unit,
     onColorChange: (Int?) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit,
@@ -155,11 +160,25 @@ private fun TypeEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 LabeledDropdown(
-                    label = "Based on template",
+                    label = "Style template",
                     options = RelationshipType.entries,
                     selected = draft.base,
-                    optionLabel = { it.label + if (it.mutual) " · mutual" else " · one-way" },
+                    optionLabel = { "${it.label} · ${it.tone.name.lowercase()}" },
                     onSelected = onBaseChange,
+                )
+                LabeledDropdown(
+                    label = "Category",
+                    options = RelationshipCategory.entries,
+                    selected = draft.category,
+                    optionLabel = { it.label },
+                    onSelected = onCategoryChange,
+                )
+                LabeledDropdown(
+                    label = "Shape",
+                    options = RelationshipStructure.entries,
+                    selected = draft.structure,
+                    optionLabel = { it.label },
+                    onSelected = onStructureChange,
                 )
                 Text("Colour", style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

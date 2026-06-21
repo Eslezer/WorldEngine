@@ -29,7 +29,11 @@ The navigation change is intentional and documented in `MainActivity.kt`.
 | Image Lab — NovelAI image generation | ✅ |
 | Settings — dark mode, font size, encrypted API key | ✅ |
 | Worlds — create/edit/delete (Room-backed) | ✅ |
-| Characters / Timeline / Relationships / Maps / Lore | ⏳ planned (shown in the menu) |
+| Characters — create/edit/delete, portrait and lore links | ✅ |
+| Timeline — events, custom calendars, periods, vertical/horizontal views | ✅ |
+| Relationships — typed links, graph/tree/pyramid views, lore filtering | ✅ |
+| Lore — custom categories, searchable codex entries | ✅ |
+| Maps | ⏳ planned last |
 
 ## Architecture
 
@@ -68,6 +72,12 @@ UI (Compose, Material 3)
 
 - **Worlds** — the root of everything. Create, edit and delete worlds; characters, maps, timelines,
   relationships and lore will each belong to a world.
+- **Lore** — a world-scoped codex/dictionary with default and custom categories, aliases, tags and
+  summaries that later features can link to.
+- **Characters** — create character profiles, assign portraits and link characters to lore entries
+  such as places, factions, cultures and magic systems.
+- **Relationships** — create typed character relationships and filter graph visibility by lore
+  category and entry, such as a faction, nation or place.
 - **Image Lab** — generate character art with NovelAI (model, resolution, sampler, noise schedule,
   steps, guidance, seed). Results are saved locally and shown in-app.
 - **Settings** — light/dark/system theme, four font sizes (applied app-wide), and encrypted entry of

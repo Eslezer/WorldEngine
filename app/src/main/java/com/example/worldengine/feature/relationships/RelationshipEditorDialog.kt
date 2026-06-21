@@ -52,7 +52,7 @@ fun RelationshipEditorDialog(
                     label = "Relationship",
                     options = typeOptions,
                     selected = selectedType,
-                    optionLabel = { it.label + if (it.base.mutual) " · mutual" else " · one-way" },
+                    optionLabel = { "${it.label} · ${it.category.label} · ${it.structure.label}" },
                     onSelected = onTypeOptionSelect,
                 )
                 LabeledDropdown(

@@ -5,8 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.worldengine.core.data.prefs.CalendarRepository
 import com.example.worldengine.domain.model.Character
 import com.example.worldengine.domain.model.CustomCalendar
+import com.example.worldengine.domain.model.LoreCategory
+import com.example.worldengine.domain.model.LoreEntry
 import com.example.worldengine.domain.model.TimelineEvent
+import com.example.worldengine.domain.model.TimelineEventLoreLink
 import com.example.worldengine.domain.repository.CharacterRepository
+import com.example.worldengine.domain.repository.LoreRepository
 import com.example.worldengine.domain.repository.TimelineRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,6 +44,7 @@ data class EventDraft(
     val startComponents: List<String> = emptyList(),
     val isPeriod: Boolean = false,
     val endComponents: List<String> = emptyList(),
+    val linkedLoreEntryIds: Set<Long> = emptySet(),
 ) {
     /** Calendar mode supplies the date, so only the name is required there; freeform also needs a date. */
     val canSave: Boolean get() = name.isNotBlank() && (calendarId != null || dateLabel.isNotBlank())
@@ -55,6 +60,7 @@ class TimelineViewModel(
     private val timelineRepository: TimelineRepository,
     characterRepository: CharacterRepository,
     calendarRepository: CalendarRepository,
+    private val loreRepository: LoreRepository,
 ) : ViewModel() {
 
     val events: StateFlow<List<TimelineEvent>> = timelineRepository.observeEvents(worldId)
@@ -64,6 +70,15 @@ class TimelineViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val calendars: StateFlow<List<CustomCalendar>> = calendarRepository.calendars
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val loreCategories: StateFlow<List<LoreCategory>> = loreRepository.observeCategories(worldId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val loreEntries: StateFlow<List<LoreEntry>> = loreRepository.observeEntries(worldId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val timelineLoreLinks: StateFlow<List<TimelineEventLoreLink>> = loreRepository.observeTimelineLinks(worldId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _viewMode = MutableStateFlow(TimelineViewMode.Vertical)
@@ -77,6 +92,10 @@ class TimelineViewModel(
     private val _draft = MutableStateFlow<EventDraft?>(null)
     val draft: StateFlow<EventDraft?> = _draft.asStateFlow()
 
+    init {
+        viewModelScope.launch { loreRepository.ensureDefaultCategories(worldId) }
+    }
+
     fun setViewMode(mode: TimelineViewMode) { _viewMode.value = mode }
     fun setNewestFirst(value: Boolean) { _newestFirst.value = value }
 
@@ -87,24 +106,28 @@ class TimelineViewModel(
     }
 
     fun startEdit(event: TimelineEvent) {
-        val calendar = event.calendarId?.let { id -> calendars.value.firstOrNull { it.id == id } }
-        _draft.value = EventDraft(
-            id = event.id,
-            name = event.name,
-            dateLabel = event.dateLabel,
-            sortKey = event.sortKey.toString(),
-            description = event.description,
-            characterId = event.characterId,
-            location = event.location,
-            duration = event.duration,
-            createdAt = event.createdAt,
-            calendarId = event.calendarId,
-            // Recover the per-unit fields from the stored keys so calendar dates can be edited.
-            startComponents = calendar?.decode(event.sortKey)?.map { it.toString() } ?: emptyList(),
-            isPeriod = event.endSortKey != null,
-            endComponents = calendar?.let { c -> event.endSortKey?.let { c.decode(it).map { v -> v.toString() } } }
-                ?: emptyList(),
-        )
+        viewModelScope.launch {
+            val linkedIds = loreRepository.getLinksForEvent(event.id).mapTo(HashSet()) { it.loreEntryId }
+            val calendar = event.calendarId?.let { id -> calendars.value.firstOrNull { it.id == id } }
+            _draft.value = EventDraft(
+                id = event.id,
+                name = event.name,
+                dateLabel = event.dateLabel,
+                sortKey = event.sortKey.toString(),
+                description = event.description,
+                characterId = event.characterId,
+                location = event.location,
+                duration = event.duration,
+                createdAt = event.createdAt,
+                calendarId = event.calendarId,
+                // Recover the per-unit fields from the stored keys so calendar dates can be edited.
+                startComponents = calendar?.decode(event.sortKey)?.map { it.toString() } ?: emptyList(),
+                isPeriod = event.endSortKey != null,
+                endComponents = calendar?.let { c -> event.endSortKey?.let { c.decode(it).map { v -> v.toString() } } }
+                    ?: emptyList(),
+                linkedLoreEntryIds = linkedIds,
+            )
+        }
     }
 
     fun dismissDraft() { _draft.value = null }
@@ -117,6 +140,14 @@ class TimelineViewModel(
     fun onLocationChange(value: String) = updateDraft { it.copy(location = value) }
     fun onDurationChange(value: String) = updateDraft { it.copy(duration = value) }
     fun setPeriod(value: Boolean) = updateDraft { it.copy(isPeriod = value) }
+    fun onLoreEntryToggled(entryId: Long) = updateDraft { draft ->
+        val next = if (entryId in draft.linkedLoreEntryIds) {
+            draft.linkedLoreEntryIds - entryId
+        } else {
+            draft.linkedLoreEntryIds + entryId
+        }
+        draft.copy(linkedLoreEntryIds = next)
+    }
 
     /** Switches the draft between freeform (null) and a custom calendar, sizing the component fields. */
     fun onCalendarSelect(id: String?) = updateDraft { d ->
@@ -165,7 +196,7 @@ class TimelineViewModel(
         }
 
         viewModelScope.launch {
-            timelineRepository.save(
+            val eventId = timelineRepository.save(
                 TimelineEvent(
                     id = d.id,
                     worldId = worldId,
@@ -182,6 +213,7 @@ class TimelineViewModel(
                     endDateLabel = endDateLabel,
                 ),
             )
+            loreRepository.setTimelineLinks(if (d.id == 0L) eventId else d.id, d.linkedLoreEntryIds)
             _draft.value = null
         }
     }

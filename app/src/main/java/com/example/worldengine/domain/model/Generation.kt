@@ -1,5 +1,7 @@
 package com.example.worldengine.domain.model
 
+import java.io.File
+
 /**
  * Domain models for image generation. These are UI/business-facing and decoupled from the
  * NovelAI wire format (see core/data/remote/novelai). Optional fields for image reference
@@ -61,6 +63,7 @@ data class GenerationRequest(
     val prompt: String,
     val negativePrompt: String,
     val settings: GenerationSettings,
+    val folder: String = GeneratedImage.DEFAULT_FOLDER,
 )
 
 /** A generated image persisted to local storage. */
@@ -69,4 +72,11 @@ data class GeneratedImage(
     val prompt: String,
     val seedUsed: Long,
     val createdAt: Long,
-)
+) {
+    val folder: String
+        get() = File(filePath).parentFile?.name?.ifBlank { DEFAULT_FOLDER } ?: DEFAULT_FOLDER
+
+    companion object {
+        const val DEFAULT_FOLDER = "General"
+    }
+}

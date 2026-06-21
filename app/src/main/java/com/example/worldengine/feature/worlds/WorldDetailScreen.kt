@@ -38,6 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.worldengine.domain.model.Character
+import com.example.worldengine.domain.model.CharacterLoreLink
+import com.example.worldengine.domain.model.LoreCategory
+import com.example.worldengine.domain.model.LoreEntry
+import com.example.worldengine.feature.lore.LoreSection
 import com.example.worldengine.feature.relationships.RelationshipsSection
 import com.example.worldengine.feature.timeline.TimelineSection
 import com.example.worldengine.ui.components.PlaceholderScreen
@@ -47,10 +51,10 @@ import java.io.File
 
 private enum class WorldSection(val label: String, val implemented: Boolean) {
     Characters("Characters", true),
-    Timeline("Timeline", false),
+    Timeline("Timeline", true),
     Maps("Maps", false),
-    Relationships("Relationships", false),
-    Lore("Lore", false),
+    Relationships("Relationships", true),
+    Lore("Lore", true),
 }
 
 @Composable
@@ -62,6 +66,9 @@ fun WorldDetailScreen(
 ) {
     val world by viewModel.world.collectAsStateWithLifecycle()
     val characters by viewModel.characters.collectAsStateWithLifecycle()
+    val loreCategories by viewModel.loreCategories.collectAsStateWithLifecycle()
+    val loreEntries by viewModel.loreEntries.collectAsStateWithLifecycle()
+    val characterLoreLinks by viewModel.characterLoreLinks.collectAsStateWithLifecycle()
     var section by remember { mutableStateOf(WorldSection.Characters) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -82,11 +89,15 @@ fun WorldDetailScreen(
             when (section) {
                 WorldSection.Characters -> CharactersSection(
                     characters = characters,
+                    loreCategories = loreCategories,
+                    loreEntries = loreEntries,
+                    characterLoreLinks = characterLoreLinks,
                     onOpenCharacter = onOpenCharacter,
                     onDeleteCharacter = viewModel::deleteCharacter,
                 )
                 WorldSection.Timeline -> TimelineSection(worldId = worldId)
                 WorldSection.Relationships -> RelationshipsSection(worldId = worldId)
+                WorldSection.Lore -> LoreSection(worldId = worldId)
                 else -> PlaceholderScreen("${section.label} — inside ${world?.name ?: "this world"}")
             }
         }
@@ -125,6 +136,9 @@ private fun SectionChips(selected: WorldSection, onSelect: (WorldSection) -> Uni
 @Composable
 private fun CharactersSection(
     characters: List<Character>,
+    loreCategories: List<LoreCategory>,
+    loreEntries: List<LoreEntry>,
+    characterLoreLinks: List<CharacterLoreLink>,
     onOpenCharacter: (Long) -> Unit,
     onDeleteCharacter: (Character) -> Unit,
 ) {
@@ -138,6 +152,13 @@ private fun CharactersSection(
         }
         return
     }
+    val linkedLoreByCharacter = remember(loreEntries, characterLoreLinks) {
+        val entriesById = loreEntries.associateBy { it.id }
+        characterLoreLinks
+            .mapNotNull { link -> entriesById[link.loreEntryId]?.let { link.characterId to it } }
+            .groupBy({ it.first }, { it.second })
+    }
+    val categoriesById = remember(loreCategories) { loreCategories.associateBy { it.id } }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 88.dp),
@@ -146,6 +167,8 @@ private fun CharactersSection(
         items(characters, key = { it.id }) { character ->
             CharacterCard(
                 character = character,
+                linkedLore = linkedLoreByCharacter[character.id].orEmpty(),
+                categoriesById = categoriesById,
                 onOpen = { onOpenCharacter(character.id) },
                 onDelete = { onDeleteCharacter(character) },
             )
@@ -154,7 +177,13 @@ private fun CharactersSection(
 }
 
 @Composable
-private fun CharacterCard(character: Character, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun CharacterCard(
+    character: Character,
+    linkedLore: List<LoreEntry>,
+    categoriesById: Map<String, LoreCategory>,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
     Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -189,6 +218,29 @@ private fun CharacterCard(character: Character, onOpen: () -> Unit, onDelete: ()
                 )
                 if (character.role.isNotBlank()) {
                     Text(character.role, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (linkedLore.isNotEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        linkedLore.take(5).forEach { entry ->
+                            val categoryName = categoriesById[entry.categoryId]?.name
+                            FilterChip(
+                                selected = false,
+                                onClick = onOpen,
+                                label = { Text(if (categoryName == null) entry.title else "$categoryName: ${entry.title}") },
+                            )
+                        }
+                        if (linkedLore.size > 5) {
+                            Text(
+                                "+${linkedLore.size - 5} more",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
                 }
             }
             IconButton(onClick = onDelete) {

@@ -60,3 +60,85 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("ALTER TABLE `character_relationships` ADD COLUMN `customTypeId` TEXT")
     }
 }
+
+/** v5 -> v6: introduces the world-scoped lore/codex category and entry tables. */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `lore_categories` (" +
+                "`id` TEXT NOT NULL, `worldId` INTEGER NOT NULL, `name` TEXT NOT NULL, " +
+                "`description` TEXT NOT NULL, `colorHex` TEXT NOT NULL, `icon` TEXT NOT NULL, " +
+                "`isDefault` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`), " +
+                "FOREIGN KEY(`worldId`) REFERENCES `worlds`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_lore_categories_worldId` ON `lore_categories` (`worldId`)")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_lore_categories_worldId_name` " +
+                "ON `lore_categories` (`worldId`, `name`)",
+        )
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `lore_entries` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `worldId` INTEGER NOT NULL, " +
+                "`categoryId` TEXT, `title` TEXT NOT NULL, `summary` TEXT NOT NULL, " +
+                "`body` TEXT NOT NULL, `aliases` TEXT NOT NULL, `tags` TEXT NOT NULL, " +
+                "`imagePath` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                "FOREIGN KEY(`worldId`) REFERENCES `worlds`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`categoryId`) REFERENCES `lore_categories`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE SET NULL )",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_lore_entries_worldId` ON `lore_entries` (`worldId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_lore_entries_categoryId` ON `lore_entries` (`categoryId`)")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_lore_entries_worldId_title` " +
+                "ON `lore_entries` (`worldId`, `title`)",
+        )
+    }
+}
+
+/** v6 -> v7: links characters to lore entries for faction/place/category-aware filtering. */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `character_lore_links` (" +
+                "`characterId` INTEGER NOT NULL, `loreEntryId` INTEGER NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`characterId`, `loreEntryId`), " +
+                "FOREIGN KEY(`characterId`) REFERENCES `characters`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`loreEntryId`) REFERENCES `lore_entries`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_character_lore_links_characterId` " +
+                "ON `character_lore_links` (`characterId`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_character_lore_links_loreEntryId` " +
+                "ON `character_lore_links` (`loreEntryId`)",
+        )
+    }
+}
+
+/** v7 -> v8: links timeline events to lore entries. */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `timeline_event_lore_links` (" +
+                "`eventId` INTEGER NOT NULL, `loreEntryId` INTEGER NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`eventId`, `loreEntryId`), " +
+                "FOREIGN KEY(`eventId`) REFERENCES `timeline_events`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`loreEntryId`) REFERENCES `lore_entries`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_timeline_event_lore_links_eventId` " +
+                "ON `timeline_event_lore_links` (`eventId`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_timeline_event_lore_links_loreEntryId` " +
+                "ON `timeline_event_lore_links` (`loreEntryId`)",
+        )
+    }
+}

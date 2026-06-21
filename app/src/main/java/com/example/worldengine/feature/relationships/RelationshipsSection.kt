@@ -2,6 +2,9 @@ package com.example.worldengine.feature.relationships
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,22 +16,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -42,6 +51,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -50,9 +60,14 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.worldengine.domain.model.Character
+import com.example.worldengine.domain.model.CharacterLoreLink
 import com.example.worldengine.domain.model.CharacterRelationship
 import com.example.worldengine.domain.model.CustomRelationshipType
 import com.example.worldengine.domain.model.HierarchyKind
+import com.example.worldengine.domain.model.LoreCategory
+import com.example.worldengine.domain.model.LoreEntry
+import com.example.worldengine.domain.model.RelationshipCategory
+import com.example.worldengine.domain.model.RelationshipStructure
 import com.example.worldengine.domain.model.RelationshipTone
 import com.example.worldengine.ui.components.LabeledDropdown
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +76,7 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -82,14 +98,34 @@ fun RelationshipsSection(
     val customTypes by viewModel.customTypes.collectAsStateWithLifecycle()
     val typeOptions by viewModel.typeOptions.collectAsStateWithLifecycle()
     val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
-    val focusId by viewModel.focusCharacterId.collectAsStateWithLifecycle()
+    val loreCategories by viewModel.loreCategories.collectAsStateWithLifecycle()
+    val loreEntries by viewModel.loreEntries.collectAsStateWithLifecycle()
+    val characterLoreLinks by viewModel.characterLoreLinks.collectAsStateWithLifecycle()
+    val filterCategoryId by viewModel.filterCategoryId.collectAsStateWithLifecycle()
+    val filterEntryId by viewModel.filterEntryId.collectAsStateWithLifecycle()
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val selectedCharacterId by viewModel.selectedCharacterId.collectAsStateWithLifecycle()
+    val centeredCharacterId by viewModel.centeredCharacterId.collectAsStateWithLifecycle()
+    val pendingDelete by viewModel.pendingDelete.collectAsStateWithLifecycle()
+    val lastDeleted by viewModel.lastDeleted.collectAsStateWithLifecycle()
 
     val characterNames = remember(characters) { characters.associate { it.id to it.name } }
     val typesById = remember(customTypes) { customTypes.associateBy { it.id } }
+    val visibleCharacters = remember(characters, characterLoreLinks, loreEntries, filterCategoryId, filterEntryId) {
+        characters.filterByLore(characterLoreLinks, loreEntries, filterCategoryId, filterEntryId)
+    }
+    val visibleIds = remember(visibleCharacters) { visibleCharacters.mapTo(HashSet()) { it.id } }
+    val visibleRelationships = remember(relationships, visibleIds) {
+        relationships.filter { it.fromCharacterId in visibleIds && it.toCharacterId in visibleIds }
+    }
+    val graphRelationships = remember(visibleRelationships, viewMode, typesById) {
+        visibleRelationships.forGraphMode(viewMode, typesById)
+    }
     // Only characters that take part in at least one relationship belong in the graph.
-    val connected = remember(characters, relationships) {
-        characters.filter { c -> relationships.any { it.fromCharacterId == c.id || it.toCharacterId == c.id } }
+    val connected = remember(visibleCharacters, graphRelationships) {
+        visibleCharacters.filter { c ->
+            graphRelationships.any { it.fromCharacterId == c.id || it.toCharacterId == c.id }
+        }
     }
     val portraits = rememberPortraits(connected)
     val enoughCharacters = characters.size >= 2
@@ -111,27 +147,54 @@ fun RelationshipsSection(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item { ViewModeChips(selected = viewMode, onSelect = viewModel::setViewMode) }
-                if (connected.isNotEmpty()) {
-                    item { FocusSelector(connected, focusId, viewModel::setFocus) }
+                item {
+                    CharacterCenterSearch(
+                        characters = visibleCharacters,
+                        centeredCharacterId = centeredCharacterId,
+                        onCenter = viewModel::centerCharacter,
+                    )
                 }
                 item {
-                    if (connected.isEmpty()) {
+                    LoreRelationshipFilter(
+                        categories = loreCategories,
+                        entries = loreEntries,
+                        links = characterLoreLinks,
+                        selectedCategoryId = filterCategoryId,
+                        selectedEntryId = filterEntryId,
+                        onCategorySelect = viewModel::setFilterCategory,
+                        onEntrySelect = viewModel::setFilterEntry,
+                    )
+                }
+                item {
+                    if (graphRelationships.isEmpty()) {
                         Text(
-                            "No relationships yet. Use the + button to connect two characters.",
+                            if (filterCategoryId == null) {
+                                emptyGraphMessage(viewMode)
+                            } else {
+                                "No ${viewMode.graphLabel()} relationships match this lore filter yet."
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     } else {
-                        val (graphChars, graphRels) = graphSubset(connected, relationships, focusId)
-                        RelationshipGraph(graphChars, graphRels, typesById, viewMode, focusId, portraits)
+                        RelationshipGraph(
+                            characters = connected,
+                            relationships = graphRelationships,
+                            typesById = typesById,
+                            mode = viewMode,
+                            focusId = selectedCharacterId ?: centeredCharacterId,
+                            centerId = centeredCharacterId,
+                            portraits = portraits,
+                            onCharacterClick = viewModel::selectCharacter,
+                        )
                     }
                 }
-                items(relationships, key = { it.id }) { relationship ->
+                items(visibleRelationships, key = { it.id }) { relationship ->
                     RelationshipCard(
                         relationship = relationship,
                         characterNames = characterNames,
                         typesById = typesById,
                         onEdit = { viewModel.startEdit(relationship) },
-                        onDelete = { viewModel.delete(relationship) },
+                        onDelete = { viewModel.askDelete(relationship) },
                     )
                 }
             }
@@ -162,40 +225,343 @@ fun RelationshipsSection(
             onDismiss = viewModel::dismissDraft,
         )
     }
+
+    selectedCharacterId?.let { characterId ->
+        val selected = characters.firstOrNull { it.id == characterId }
+        if (selected != null) {
+            CharacterRelationshipsDialog(
+                character = selected,
+                characters = characters,
+                relationships = relationships,
+                typesById = typesById,
+                lastDeleted = lastDeleted,
+                onEdit = viewModel::startEdit,
+                onAskDelete = viewModel::askDelete,
+                onAdd = { other -> viewModel.startCreateBetween(selected.id, other.id) },
+                onUndoDelete = viewModel::restoreLastDeleted,
+                onDismiss = { viewModel.selectCharacter(null) },
+            )
+        }
+    }
+
+    pendingDelete?.let { relationship ->
+        DeleteRelationshipDialog(
+            relationship = relationship,
+            characterNames = characterNames,
+            typesById = typesById,
+            onConfirm = viewModel::confirmDelete,
+            onDismiss = viewModel::dismissDelete,
+        )
+    }
+}
+
+@Composable
+private fun CharacterRelationshipsDialog(
+    character: Character,
+    characters: List<Character>,
+    relationships: List<CharacterRelationship>,
+    typesById: Map<String, CustomRelationshipType>,
+    lastDeleted: CharacterRelationship?,
+    onEdit: (CharacterRelationship) -> Unit,
+    onAskDelete: (CharacterRelationship) -> Unit,
+    onAdd: (Character) -> Unit,
+    onUndoDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val others = remember(characters, character.id) {
+        characters.filter { it.id != character.id }.sortedBy { it.name.lowercase() }
+    }
+    val relationshipsByOther = remember(relationships, character.id) {
+        relationships
+            .filter { it.fromCharacterId == character.id || it.toCharacterId == character.id }
+            .flatMap { rel ->
+                val otherId = if (rel.fromCharacterId == character.id) rel.toCharacterId else rel.fromCharacterId
+                listOf(otherId to rel)
+            }
+            .groupBy({ it.first }, { it.second })
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("${character.name}'s relationships") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                others.forEach { other ->
+                    CharacterRelationshipOverviewRow(
+                        characterId = character.id,
+                        other = other,
+                        relationships = relationshipsByOther[other.id].orEmpty(),
+                        typesById = typesById,
+                        onEdit = onEdit,
+                        onAskDelete = onAskDelete,
+                        onAdd = { onAdd(other) },
+                    )
+                }
+                if (lastDeleted != null) {
+                    TextButton(onClick = onUndoDelete) {
+                        Text("Restore last deleted relationship")
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
+}
+
+@Composable
+private fun CharacterRelationshipOverviewRow(
+    characterId: Long,
+    other: Character,
+    relationships: List<CharacterRelationship>,
+    typesById: Map<String, CustomRelationshipType>,
+    onEdit: (CharacterRelationship) -> Unit,
+    onAskDelete: (CharacterRelationship) -> Unit,
+    onAdd: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(other.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                IconButton(onClick = onAdd) {
+                    Icon(Icons.Default.Add, contentDescription = "Add relationship with ${other.name}")
+                }
+            }
+            if (relationships.isEmpty()) {
+                Text("None", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                relationships.forEach { relationship ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            relationshipOverviewText(characterId, relationship, typesById),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { onEdit(relationship) }) { Text("Edit") }
+                        IconButton(onClick = { onAskDelete(relationship) }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete relationship")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteRelationshipDialog(
+    relationship: CharacterRelationship,
+    characterNames: Map<Long, String>,
+    typesById: Map<String, CustomRelationshipType>,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val from = characterNames[relationship.fromCharacterId] ?: "?"
+    val to = characterNames[relationship.toCharacterId] ?: "?"
+    val typeName = relationship.customTypeId?.let { typesById[it]?.name } ?: relationship.type.label
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete relationship?") },
+        text = { Text("$from / $to · $typeName") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Delete") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+private fun relationshipOverviewText(
+    selectedCharacterId: Long,
+    relationship: CharacterRelationship,
+    typesById: Map<String, CustomRelationshipType>,
+): String {
+    val typeName = relationship.customTypeId?.let { typesById[it]?.name } ?: relationship.type.label
+    val structure = relationship.structure(typesById)
+    val oriented = when {
+        structure == RelationshipStructure.PEER -> typeName
+        relationship.fromCharacterId == selectedCharacterId -> typeName
+        structure == RelationshipStructure.OVER -> "${typeName} (under)"
+        else -> "${typeName} (over)"
+    }
+    return if (relationship.label.isBlank()) oriented else "$oriented · ${relationship.label}"
 }
 
 @Composable
 private fun ViewModeChips(selected: RelationshipViewMode, onSelect: (RelationshipViewMode) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         RelationshipViewMode.entries.forEach { mode ->
-            FilterChip(selected = mode == selected, onClick = { onSelect(mode) }, label = { Text(mode.name) })
+            FilterChip(selected = mode == selected, onClick = { onSelect(mode) }, label = { Text(mode.label) })
         }
     }
 }
 
 @Composable
-private fun FocusSelector(characters: List<Character>, focusId: Long?, onSelect: (Long?) -> Unit) {
-    val options = remember(characters) { listOf<Character?>(null) + characters }
-    val selected = characters.firstOrNull { it.id == focusId }
-    LabeledDropdown(
-        label = "Focus",
-        options = options,
-        selected = selected,
-        optionLabel = { it?.name ?: "Everyone (no focus)" },
-        onSelected = { onSelect(it?.id) },
-    )
+private fun CharacterCenterSearch(
+    characters: List<Character>,
+    centeredCharacterId: Long?,
+    onCenter: (Long?) -> Unit,
+) {
+    var query by remember(centeredCharacterId, characters) {
+        mutableStateOf(characters.firstOrNull { it.id == centeredCharacterId }?.name.orEmpty())
+    }
+    val suggestions = remember(query, characters) {
+        val q = query.trim()
+        if (q.isBlank()) {
+            emptyList()
+        } else {
+            characters
+                .filter { it.name.contains(q, ignoreCase = true) }
+                .take(5)
+        }
+    }
+
+    Card {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = {
+                    query = it
+                    if (it.isBlank()) onCenter(null)
+                },
+                label = { Text("Center on character") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                suggestions.forEach { character ->
+                    FilterChip(
+                        selected = character.id == centeredCharacterId,
+                        onClick = {
+                            query = character.name
+                            onCenter(character.id)
+                        },
+                        label = { Text(character.name) },
+                    )
+                }
+                if (centeredCharacterId != null) {
+                    TextButton(
+                        onClick = {
+                            query = ""
+                            onCenter(null)
+                        },
+                    ) {
+                        Text("Clear")
+                    }
+                }
+            }
+        }
+    }
 }
 
-/** Restricts the graph to a focused character's neighbourhood, or the whole connected set. */
-private fun graphSubset(
-    connected: List<Character>,
-    relationships: List<CharacterRelationship>,
-    focusId: Long?,
-): Pair<List<Character>, List<CharacterRelationship>> {
-    if (focusId == null) return connected to relationships
-    val incident = relationships.filter { it.fromCharacterId == focusId || it.toCharacterId == focusId }
-    val keep = incident.flatMapTo(HashSet()) { listOf(it.fromCharacterId, it.toCharacterId) }
-    return connected.filter { it.id in keep } to incident
+@Composable
+private fun LoreRelationshipFilter(
+    categories: List<LoreCategory>,
+    entries: List<LoreEntry>,
+    links: List<CharacterLoreLink>,
+    selectedCategoryId: String?,
+    selectedEntryId: Long?,
+    onCategorySelect: (String?) -> Unit,
+    onEntrySelect: (Long?) -> Unit,
+) {
+    val categoryOptions = remember(categories) { listOf<LoreCategory?>(null) + categories }
+    val selectedCategory = categories.firstOrNull { it.id == selectedCategoryId }
+    val entriesForCategory = remember(entries, selectedCategoryId) {
+        if (selectedCategoryId == null) emptyList() else entries.filter { it.categoryId == selectedCategoryId }
+    }
+    val entryOptions = remember(entriesForCategory) { listOf<LoreEntry?>(null) + entriesForCategory }
+    val selectedEntry = entriesForCategory.firstOrNull { it.id == selectedEntryId }
+    val linkCounts = remember(links) { links.groupingBy { it.loreEntryId }.eachCount() }
+
+    Card {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Lore filter", style = MaterialTheme.typography.titleMedium)
+            LabeledDropdown(
+                label = "Category",
+                options = categoryOptions,
+                selected = selectedCategory,
+                optionLabel = { it?.name ?: "All categories" },
+                onSelected = { onCategorySelect(it?.id) },
+            )
+            if (selectedCategory != null) {
+                if (entriesForCategory.isEmpty()) {
+                    Text(
+                        "No ${selectedCategory.name.lowercase()} entries yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    LabeledDropdown(
+                        label = selectedCategory.name,
+                        options = entryOptions,
+                        selected = selectedEntry,
+                        optionLabel = { entry ->
+                            if (entry == null) {
+                                "All ${selectedCategory.name}"
+                            } else {
+                                "${entry.title} (${linkCounts[entry.id] ?: 0})"
+                            }
+                        },
+                        onSelected = { onEntrySelect(it?.id) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun List<Character>.filterByLore(
+    links: List<CharacterLoreLink>,
+    entries: List<LoreEntry>,
+    selectedCategoryId: String?,
+    selectedEntryId: Long?,
+): List<Character> {
+    if (selectedCategoryId == null && selectedEntryId == null) return this
+    val entryIds = if (selectedEntryId != null) {
+        setOf(selectedEntryId)
+    } else {
+        entries.filter { it.categoryId == selectedCategoryId }.mapTo(HashSet()) { it.id }
+    }
+    val characterIds = links
+        .filter { it.loreEntryId in entryIds }
+        .mapTo(HashSet()) { it.characterId }
+    return filter { it.id in characterIds }
+}
+
+private fun List<CharacterRelationship>.forGraphMode(
+    mode: RelationshipViewMode,
+    typesById: Map<String, CustomRelationshipType>,
+): List<CharacterRelationship> = when (mode) {
+    RelationshipViewMode.Web -> this
+    RelationshipViewMode.Familial -> filter { it.category(typesById) == RelationshipCategory.FAMILIAL }
+    RelationshipViewMode.Factional -> filter { it.category(typesById) == RelationshipCategory.FACTIONAL }
+    RelationshipViewMode.Social -> filter { it.category(typesById) == RelationshipCategory.SOCIAL }
+}
+
+private fun CharacterRelationship.category(typesById: Map<String, CustomRelationshipType>): RelationshipCategory =
+    customTypeId?.let { typesById[it]?.category } ?: type.category
+
+private fun CharacterRelationship.structure(typesById: Map<String, CustomRelationshipType>): RelationshipStructure =
+    customTypeId?.let { typesById[it]?.structure } ?: type.structure
+
+private fun CharacterRelationship.hierarchy(typesById: Map<String, CustomRelationshipType>): HierarchyKind =
+    customTypeId?.let { typesById[it]?.hierarchy } ?: type.hierarchy
+
+private fun RelationshipViewMode.graphLabel(): String = when (this) {
+    RelationshipViewMode.Web -> "web"
+    RelationshipViewMode.Familial -> "familial"
+    RelationshipViewMode.Factional -> "factional"
+    RelationshipViewMode.Social -> "social"
+}
+
+private fun emptyGraphMessage(mode: RelationshipViewMode): String = when (mode) {
+    RelationshipViewMode.Web -> "No relationships yet. Use the + button to connect two characters."
+    RelationshipViewMode.Familial -> "No familial relationships yet. Add Partner, Family or Parent of links to build this view."
+    RelationshipViewMode.Factional -> "No factional relationships yet. Add Superior of or faction custom links to build this view."
+    RelationshipViewMode.Social -> "No social relationships yet. Add Friend, Rival, Enemy or social custom links to build this view."
 }
 
 @Composable
@@ -205,7 +571,9 @@ private fun RelationshipGraph(
     typesById: Map<String, CustomRelationshipType>,
     mode: RelationshipViewMode,
     focusId: Long?,
+    centerId: Long?,
     portraits: Map<Long, ImageBitmap>,
+    onCharacterClick: (Long) -> Unit,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val nodeColor = MaterialTheme.colorScheme.primaryContainer
@@ -214,40 +582,52 @@ private fun RelationshipGraph(
     val labelColor = MaterialTheme.colorScheme.onSurface
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = labelColor)
 
-    // Tree ranks by family (Parent of), Pyramid by org (Superior of). Keyed on mode so switching
-    // views recomputes (an earlier omission of the mode key reused a stale map).
-    val levels = remember(characters, relationships, mode) {
+    val levels = remember(characters, relationships, mode, typesById) {
         when (mode) {
-            RelationshipViewMode.Tree -> computeLevels(characters, relationships, HierarchyKind.FAMILY)
-            RelationshipViewMode.Pyramid -> computeLevels(characters, relationships, HierarchyKind.ORG)
-            RelationshipViewMode.Web -> emptyMap()
+            RelationshipViewMode.Familial -> computeLevels(characters, relationships, HierarchyKind.FAMILY, typesById)
+            RelationshipViewMode.Factional -> computeLevels(characters, relationships, HierarchyKind.ORG, typesById)
+            RelationshipViewMode.Web, RelationshipViewMode.Social -> emptyMap()
         }
     }
     val maxLevel = levels.values.maxOrNull() ?: 0
     val edgeOffset = remember(relationships) { computeEdgeOffsets(relationships) }
+    var nodePositions by remember { mutableStateOf<Map<Long, Offset>>(emptyMap()) }
 
     val canvasHeight = when (mode) {
-        RelationshipViewMode.Web -> 300.dp
+        RelationshipViewMode.Web, RelationshipViewMode.Social -> 300.dp
         else -> (140 + maxLevel * 90).dp
     }
 
     Card {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Focus only filters to a character's neighbourhood; the layout still follows the chosen
-            // view mode (so Tree stays a tree). In Tree/Pyramid that naturally puts the focus's
-            // parents above, children below and mutual peers beside it.
-            val title = "Relationship ${mode.name.lowercase()}" + if (focusId != null) " (focused)" else ""
+            val title = "Relationship ${mode.label.lowercase()}" + if (focusId != null) " (focused)" else ""
             Text(title, style = MaterialTheme.typography.titleMedium)
-            Canvas(modifier = Modifier.fillMaxWidth().height(canvasHeight)) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(canvasHeight)
+                    .pointerInput(nodePositions) {
+                        detectTapGestures { tap ->
+                            val hit = nodePositions.minByOrNull { (_, pos) ->
+                                hypot((tap.x - pos.x).toDouble(), (tap.y - pos.y).toDouble())
+                            }?.takeIf { (_, pos) ->
+                                hypot((tap.x - pos.x).toDouble(), (tap.y - pos.y).toDouble()) <= 36.0
+                            }
+                            hit?.let { (id, _) -> onCharacterClick(id) }
+                        }
+                    },
+            ) {
                 if (characters.isEmpty()) return@Canvas
                 val nodeRadius = 18.dp.toPx()
                 val positions: Map<Long, Offset> = when (mode) {
-                    RelationshipViewMode.Web -> circularPositions(characters, size.width, size.height)
-                    RelationshipViewMode.Tree ->
-                        layeredPositions(characters, levels, maxLevel, size.width, size.height, pyramid = false)
-                    RelationshipViewMode.Pyramid ->
-                        layeredPositions(characters, levels, maxLevel, size.width, size.height, pyramid = true)
+                    RelationshipViewMode.Web, RelationshipViewMode.Social ->
+                        circularPositions(characters, size.width, size.height, centerId)
+                    RelationshipViewMode.Familial ->
+                        layeredPositions(characters, levels, maxLevel, size.width, size.height, pyramid = false, centerId = centerId)
+                    RelationshipViewMode.Factional ->
+                        layeredPositions(characters, levels, maxLevel, size.width, size.height, pyramid = true, centerId = centerId)
                 }
+                nodePositions = positions
 
                 val spacing = 14.dp.toPx()
                 val headSize = 9.dp.toPx()
@@ -261,15 +641,18 @@ private fun RelationshipGraph(
                     val custom = rel.customTypeId?.let { typesById[it] }
                     val color = custom?.color ?: rel.type.color
                     val tone = custom?.tone ?: rel.type.tone
+                    val structure = rel.structure(typesById)
+                    val drawFrom = if (structure == RelationshipStructure.UNDER) toNode else fromNode
+                    val drawTo = if (structure == RelationshipStructure.UNDER) fromNode else toNode
                     drawRelationshipEdge(
-                        from = fromNode,
-                        to = toNode,
+                        from = drawFrom,
+                        to = drawTo,
                         lowPos = lowPos,
                         highPos = highPos,
                         offsetPx = (edgeOffset[rel.id] ?: 0f) * spacing,
                         color = color,
                         tone = tone,
-                        mutual = rel.type.mutual,
+                        structure = structure,
                         nodeRadius = nodeRadius,
                         headSize = headSize,
                     )
@@ -310,8 +693,8 @@ private fun RelationshipLegend() {
             LegendLine(RelationshipTone.HOSTILE, "Hostile", lineColor)
         }
         Text(
-            "→ one-way    ↔ two-way (mutual).  Tree ranks family (Parent of); Pyramid ranks org " +
-                "(Superior of).",
+            "Plain lines are peers (=). Arrows point from over to under. Familial and factional " +
+                "views use rows; social uses a web.",
             style = MaterialTheme.typography.bodySmall,
         )
     }
@@ -351,10 +734,23 @@ private fun decodeDownscaled(path: String, target: Int): android.graphics.Bitmap
     return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
 }
 
-/** Even ring layout (Web). */
-private fun circularPositions(characters: List<Character>, w: Float, h: Float): Map<Long, Offset> {
+/** Even ring layout, optionally pulling one character into the centre. */
+private fun circularPositions(characters: List<Character>, w: Float, h: Float, centerId: Long?): Map<Long, Offset> {
     val n = characters.size
     val center = Offset(w / 2f, h / 2f)
+    val centered = characters.firstOrNull { it.id == centerId }
+    if (centered != null) {
+        val ring = characters.filter { it.id != centerId }
+        if (ring.isEmpty()) return mapOf(centered.id to center)
+        val radius = min(w, h) / 2f * 0.72f
+        return buildMap {
+            put(centered.id, center)
+            ring.forEachIndexed { i, c ->
+                val angle = (2.0 * Math.PI * i / ring.size) - Math.PI / 2.0
+                put(c.id, Offset(center.x + radius * cos(angle).toFloat(), center.y + radius * sin(angle).toFloat()))
+            }
+        }
+    }
     val radius = min(w, h) / 2f * 0.74f
     return characters.mapIndexed { i, c ->
         val angle = (2.0 * Math.PI * i / n) - Math.PI / 2.0
@@ -370,6 +766,7 @@ private fun layeredPositions(
     w: Float,
     h: Float,
     pyramid: Boolean,
+    centerId: Long?,
 ): Map<Long, Offset> {
     val byLevel = characters.groupBy { levels[it.id] ?: 0 }
     val rowHeight = h / (maxLevel + 1)
@@ -378,11 +775,19 @@ private fun layeredPositions(
         val y = rowHeight * (level + 0.5f)
         val rowWidth = if (pyramid) w * (level + 1f) / (maxLevel + 1f) else w
         val startX = (w - rowWidth) / 2f
-        rowChars.forEachIndexed { i, c ->
-            out[c.id] = Offset(startX + rowWidth * (i + 0.5f) / rowChars.size, y)
+        val ordered = rowChars.centerOrdered(centerId)
+        ordered.forEachIndexed { i, c ->
+            out[c.id] = Offset(startX + rowWidth * (i + 0.5f) / ordered.size, y)
         }
     }
     return out
+}
+
+private fun List<Character>.centerOrdered(centerId: Long?): List<Character> {
+    val centered = firstOrNull { it.id == centerId } ?: return sortedBy { it.name.lowercase() }
+    val others = filter { it.id != centerId }.sortedBy { it.name.lowercase() }
+    val leftCount = others.size / 2
+    return others.take(leftCount) + centered + others.drop(leftCount)
 }
 
 /**
@@ -395,11 +800,14 @@ private fun computeLevels(
     characters: List<Character>,
     relationships: List<CharacterRelationship>,
     kind: HierarchyKind,
+    typesById: Map<String, CustomRelationshipType>,
 ): Map<Long, Int> {
     val ids = characters.mapTo(HashSet()) { it.id }
-    val parents = relationships
-        .filter { it.type.hierarchy == kind && it.fromCharacterId in ids && it.toCharacterId in ids }
-        .groupBy({ it.toCharacterId }, { it.fromCharacterId })
+    val hierarchyEdges = relationships.mapNotNull { rel ->
+        rel.normalizedHierarchyEdge(typesById)
+            ?.takeIf { (parent, child) -> parent in ids && child in ids && rel.hierarchy(typesById) == kind }
+    }
+    val parents = hierarchyEdges.groupBy({ it.second }, { it.first })
 
     val level = HashMap<Long, Int>()
     fun depth(id: Long, visiting: Set<Long>): Int {
@@ -413,8 +821,47 @@ private fun computeLevels(
         level[id] = d
         return d
     }
-    characters.forEach { depth(it.id, emptySet()) }
+    val idsInHierarchy = hierarchyEdges.flatMapTo(HashSet()) { listOf(it.first, it.second) }
+    idsInHierarchy.forEach { depth(it, emptySet()) }
+
+    val peerEdges = relationships
+        .filter { it.structure(typesById) == RelationshipStructure.PEER }
+        .filter { rel ->
+            rel.category(typesById).toGraphHierarchy() == kind &&
+                rel.fromCharacterId in ids &&
+                rel.toCharacterId in ids
+        }
+    repeat(characters.size.coerceAtLeast(1)) {
+        peerEdges.forEach { rel ->
+            val fromLevel = level[rel.fromCharacterId]
+            val toLevel = level[rel.toCharacterId]
+            when {
+                fromLevel != null && toLevel == null -> level[rel.toCharacterId] = fromLevel
+                toLevel != null && fromLevel == null -> level[rel.fromCharacterId] = toLevel
+                fromLevel != null && toLevel != null && fromLevel != toLevel -> {
+                    val merged = maxOf(fromLevel, toLevel)
+                    level[rel.fromCharacterId] = merged
+                    level[rel.toCharacterId] = merged
+                }
+            }
+        }
+    }
+    characters.forEach { level.putIfAbsent(it.id, 0) }
     return level
+}
+
+private fun RelationshipCategory.toGraphHierarchy(): HierarchyKind = when (this) {
+    RelationshipCategory.FAMILIAL -> HierarchyKind.FAMILY
+    RelationshipCategory.FACTIONAL -> HierarchyKind.ORG
+    RelationshipCategory.SOCIAL -> HierarchyKind.NONE
+}
+
+private fun CharacterRelationship.normalizedHierarchyEdge(
+    typesById: Map<String, CustomRelationshipType>,
+): Pair<Long, Long>? = when (structure(typesById)) {
+    RelationshipStructure.OVER -> fromCharacterId to toCharacterId
+    RelationshipStructure.UNDER -> toCharacterId to fromCharacterId
+    RelationshipStructure.PEER -> null
 }
 
 /**
@@ -447,8 +894,8 @@ private fun perpUnit(lowPos: Offset, highPos: Offset): Offset {
 /**
  * Draws one relationship edge. Edges sharing a character pair are shifted into separate parallel
  * lanes (offset perpendicular along their whole length, using a consistent low → high orientation so
- * opposite-direction edges still split apart). Arrowheads sit at the `to` end, plus the `from` end
- * when [mutual].
+ * opposite-direction edges still split apart). Peer edges are plain lines; over/under edges point
+ * from the higher/source role to the lower/target role.
  */
 private fun DrawScope.drawRelationshipEdge(
     from: Offset,
@@ -458,7 +905,7 @@ private fun DrawScope.drawRelationshipEdge(
     offsetPx: Float,
     color: Color,
     tone: RelationshipTone,
-    mutual: Boolean,
+    structure: RelationshipStructure,
     nodeRadius: Float,
     headSize: Float,
 ) {
@@ -474,8 +921,9 @@ private fun DrawScope.drawRelationshipEdge(
         end = Offset(to.x + shift.x, to.y + shift.y)
     }
     drawRelationshipLine(start, end, color, tone, 3.dp.toPx())
-    drawArrowHead(start, end, nodeRadius, color, headSize)
-    if (mutual) drawArrowHead(end, start, nodeRadius, color, headSize)
+    if (structure != RelationshipStructure.PEER) {
+        drawArrowHead(start, end, nodeRadius, color, headSize)
+    }
 }
 
 /** Tone → stroke dash pattern: solid (positive), long dashes (neutral), round dots (hostile). */
@@ -535,7 +983,11 @@ private fun RelationshipCard(
 ) {
     val from = characterNames[relationship.fromCharacterId] ?: "?"
     val to = characterNames[relationship.toCharacterId] ?: "?"
-    val connector = if (relationship.type.mutual) "↔" else "→"
+    val connector = when (relationship.structure(typesById)) {
+        RelationshipStructure.PEER -> "="
+        RelationshipStructure.OVER -> ">"
+        RelationshipStructure.UNDER -> "<"
+    }
     val typeName = relationship.customTypeId?.let { typesById[it]?.name } ?: relationship.type.label
 
     Card(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
@@ -548,6 +1000,10 @@ private fun RelationshipCard(
                 )
                 val subtitle = buildString {
                     append(typeName)
+                    append(" · ")
+                    append(relationship.category(typesById).label)
+                    append(" · ")
+                    append(relationship.structure(typesById).label)
                     if (relationship.label.isNotBlank()) append(" · ${relationship.label}")
                 }
                 Text(subtitle, style = MaterialTheme.typography.bodySmall)

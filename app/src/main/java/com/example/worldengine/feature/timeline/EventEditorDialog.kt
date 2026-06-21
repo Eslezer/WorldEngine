@@ -10,18 +10,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.worldengine.domain.model.Character
 import com.example.worldengine.domain.model.CustomCalendar
+import com.example.worldengine.domain.model.LoreCategory
+import com.example.worldengine.domain.model.LoreEntry
 import com.example.worldengine.ui.components.LabeledDropdown
 
 /**
@@ -34,6 +41,8 @@ fun EventEditorDialog(
     draft: EventDraft,
     characters: List<Character>,
     calendars: List<CustomCalendar>,
+    loreCategories: List<LoreCategory>,
+    loreEntries: List<LoreEntry>,
     onNameChange: (String) -> Unit,
     onDateChange: (String) -> Unit,
     onSortKeyChange: (String) -> Unit,
@@ -45,6 +54,7 @@ fun EventEditorDialog(
     onStartComponentChange: (Int, String) -> Unit,
     onEndComponentChange: (Int, String) -> Unit,
     onPeriodChange: (Boolean) -> Unit,
+    onLoreEntryToggle: (Long) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -150,6 +160,12 @@ fun EventEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                LoreLinksEditor(
+                    categories = loreCategories,
+                    entries = loreEntries,
+                    linkedIds = draft.linkedLoreEntryIds,
+                    onToggle = onLoreEntryToggle,
+                )
                 OutlinedTextField(
                     value = draft.description,
                     onValueChange = onDescriptionChange,
@@ -162,6 +178,43 @@ fun EventEditorDialog(
         confirmButton = { TextButton(onClick = onSave, enabled = draft.canSave) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+@Composable
+private fun LoreLinksEditor(
+    categories: List<LoreCategory>,
+    entries: List<LoreEntry>,
+    linkedIds: Set<Long>,
+    onToggle: (Long) -> Unit,
+) {
+    if (categories.isEmpty()) return
+    var selectedCategoryId by remember(categories) { mutableStateOf(categories.firstOrNull()?.id) }
+    val selectedCategory = categories.firstOrNull { it.id == selectedCategoryId } ?: categories.first()
+    val entriesInCategory = entries.filter { it.categoryId == selectedCategory.id }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Lore links", style = MaterialTheme.typography.labelLarge)
+        LabeledDropdown(
+            label = "Lore category",
+            options = categories,
+            selected = selectedCategory,
+            optionLabel = { it.name },
+            onSelected = { selectedCategoryId = it.id },
+        )
+        if (entriesInCategory.isEmpty()) {
+            Text("No entries in ${selectedCategory.name} yet.", style = MaterialTheme.typography.bodySmall)
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                entriesInCategory.forEach { entry ->
+                    FilterChip(
+                        selected = entry.id in linkedIds,
+                        onClick = { onToggle(entry.id) },
+                        label = { Text(entry.title) },
+                    )
+                }
+            }
+        }
+    }
 }
 
 /** One numeric field per calendar unit (e.g. Year / Month / Day). */
