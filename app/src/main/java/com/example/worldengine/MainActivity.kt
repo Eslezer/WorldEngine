@@ -40,19 +40,6 @@ import com.example.worldengine.ui.navigation.Destination
 import com.example.worldengine.ui.navigation.Routes
 import com.example.worldengine.ui.theme.WorldEngineTheme
 import org.koin.compose.koinInject
-
-/**
- * Built on the JCU CP3406/CP5307 utility-app starter template. The template makes a single-Activity
- * Jetpack Compose + Material 3 app whose [UtilityApp][com.example.utilityapp] composable wraps a
- * [Scaffold] with a bottom [NavigationBar] (Utility / Settings tabs) and switches screens from the
- * selected tab.
- *
- * World Engine keeps that exact base function: a [Scaffold] driven by a bottom [NavigationBar]. The
- * only expansion over the template is that the two starter tabs grow to the three top-level sections
- * this app needs. Image Generation, Worlds and Settings (see [Destination]) and tab selection is
- * given through a [NavHost] so each section can unfold into (Worlds → World → Character) while the
- * theme in `ui/theme` is carried over from the template.
- */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

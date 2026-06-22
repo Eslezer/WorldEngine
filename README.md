@@ -1,100 +1,196 @@
 # World Engine
 
-A worldbuilding companion for writers and hobbyists — an Android app for creating and managing
-original creative universes: **worlds** and the characters, maps, timelines, relationship trees &
-matrices, and lore that live inside them, plus **AI-generated character art via the NovelAI API**.
+World Engine is the Android utility app I built for CP3406/CP5307 Assignment 1 by extending the
+provided JCU utility app starter template.
 
-Built for **CP3406/CP5307** by extending the provided
-[utility-app starter template](https://github.com/JCU-Mobile-Technologies/CP3406_CP5307_UtilityAppStarterTemplate).
+The core function of the app is image generation using the NovelAI API and a key. However
+I took interest in further developing the app for writing creative works and facilitating viewing them, as I might 
+even use the app myself or recommend it to friends.
 
-## Relationship to the starter template
+## Part 1: Assessment Core - Image Generation Utility
 
-This project began as the JCU starter template and grew from it; the template is the first commit in
-the history. What was kept and how it was extended:
+The core utility feature is the Image Generation section. This is the part of the app that I did that
+directly addresses the assignment requirement for a focused utility-style mobile application.
 
-| Template element | In World Engine |
-|------------------|-----------------|
-| Single `ComponentActivity` + Jetpack Compose + Material 3 | Kept as the foundation |
-| `ui/theme` (`Color.kt`, `Theme.kt`, `Type.kt`, Purple/Pink scheme) | Carried over; `Theme.kt` extended with light/dark mode + font scaling |
-| `Scaffold` app shell | Kept |
-| Bottom `NavigationBar` with Utility/Settings tabs | **Evolved into a `ModalNavigationDrawer`** (burger menu) to scale to many sections; Settings remains a destination |
-| `UtilityScreen` counter demo | Replaced by real feature screens (Image Lab, Worlds, …) |
+The Image Generation workflow allows users to:
 
-The navigation change is intentional and documented in `MainActivity.kt`.
+- Enter a prompt and negative prompt for AI image generation.
+- Configure generation settings such as model, resolution, sampler, steps, guidance, noise schedule,
+  and seed.
+- Generate images through the NovelAI API using Retrofit and OkHttp.
+- Save generated images locally on the device.
+- Choose which folder new generations should be saved into.
+- Open a dedicated image gallery from the Image Generation screen.
+- View generated images at larger size in the gallery.
+- Select multiple images at once.
+- Move selected images between folders.
+- Delete selected images with confirmation.
+- Download/export selected images to the device's public Pictures folder.
+- Assign the latest generated image as a character portrait.
 
-## Status
+The Settings section supports the image utility by allowing the user to:
 
-| Section | State |
-|---------|-------|
-| Image Lab — NovelAI image generation | ✅ |
-| Settings — dark mode, font size, encrypted API key | ✅ |
-| Worlds — create/edit/delete (Room-backed) | ✅ |
-| Characters — create/edit/delete, portrait and lore links | ✅ |
-| Timeline — events, custom calendars, periods, vertical/horizontal views | ✅ |
-| Relationships — typed links, graph/tree/pyramid views, lore filtering | ✅ |
-| Lore — custom categories, searchable codex entries | ✅ |
-| Maps | ⏳ planned last |
+- Store a NovelAI API key securely. (I should have provided a test key with the ZIP and in JCU)
+- Change app theme mode.
+- Change app font size.
 
-## Architecture
+The API key is stored using encrypted preferences and is not committed to the project.
 
-Pragmatic **MVVM + Repository** with a single source of truth in the data layer.
+## Part 2: Additional Exploration - Worldbuilding Features
 
-```
-UI (Compose, Material 3)
-  → ViewModel (StateFlow UI state)
-    → Repository (interface in domain/, impl in data/)
-      → Data sources: Room (local DB), NovelAI (Retrofit/OkHttp),
-        DataStore (preferences), EncryptedSharedPreferences (API key), local files
-```
+After building the image generation utility, I expanded World Engine into a broader creative
+worldbuilding companion. These features go beyond the basic assessment requirement, but they support
+the image-generation workflow by giving generated images a meaningful creative context. These would all
+be just done as sort of an experiment and seeing how far I could get with upgrading
+the app past the requirement.
 
-| Package | Responsibility |
-|---------|----------------|
-| `core/di` | Koin module (`appModule`) |
-| `core/data/local` | Room `WorldEngineDatabase`, entities, DAOs |
-| `core/data/remote/novelai` | Retrofit API, DTOs (NAI V4.5 format), auth interceptor, ZIP extractor |
-| `core/data/prefs` | `SecureKeyStore` (encrypted key) + `AppPreferencesRepository` (DataStore) |
-| `domain/model`, `domain/repository` | Domain models and repository interfaces |
-| `data/repository`, `data/mapper` | Repository implementations and entity↔domain mappers |
-| `feature/imagelab`, `feature/settings`, `feature/worlds` | Screens + ViewModels |
-| `ui/theme`, `ui/components`, `ui/navigation` | Theming, reusable composables, drawer destinations |
+Additional worldbuilding features include:
 
-### Tech stack
+- **Worlds**: create, edit, and delete fictional worlds.
+- **Characters**: create character profiles and attach generated portraits.
+- **Lore/Codex**: create lore categories and entries, including custom categories.
+- **Character lore links**: connect characters to places, factions, magic systems, cultures, or other
+  lore entries.
+- **Timeline**: create world events, custom calendar dates, and link events to lore.
+- **Relationships**: create typed character relationships.
+- **Relationship views**: display relationships as web, tree, or hierarchy-style views.
+- **Lore filtering**: filter relationship graphs by lore category and entry.
+- **Custom relationship types**: create relationship types with familial, factional, or social
+  behaviour.
 
-- **Kotlin** + **Jetpack Compose** + **Material 3**
-- **Koin** for dependency injection
-- **Room** for the local database
-- **Retrofit** + **OkHttp** + **kotlinx.serialization** for networking
-- **DataStore** (appearance prefs) + **security-crypto** (encrypted NovelAI key)
-- **Coil** for image loading
-- **Coroutines / StateFlow** for async, lifecycle-aware state
+- I wished to implement maps for the MVP but they seem to be quite a big endeavour for now.
 
-## Features
+## Relationship to the Starter Template
 
-- **Worlds** — the root of everything. Create, edit and delete worlds; characters, maps, timelines,
-  relationships and lore will each belong to a world.
-- **Lore** — a world-scoped codex/dictionary with default and custom categories, aliases, tags and
-  summaries that later features can link to.
-- **Characters** — create character profiles, assign portraits and link characters to lore entries
-  such as places, factions, cultures and magic systems.
-- **Relationships** — create typed character relationships and filter graph visibility by lore
-  category and entry, such as a faction, nation or place.
-- **Image Lab** — generate character art with NovelAI (model, resolution, sampler, noise schedule,
-  steps, guidance, seed). Results are saved locally and shown in-app.
-- **Settings** — light/dark/system theme, four font sizes (applied app-wide), and encrypted entry of
-  your NovelAI API key.
+This project began from the JCU CP3406/CP5307 utility app starter template.
 
-## Building
+The starter template provided:
 
-Targets `minSdk 26` / `targetSdk 36`. Gradle (AGP 9.2.1) requires **JDK 17+**.
+- A single `ComponentActivity`.
+- Jetpack Compose UI.
+- Material Design 3 styling.
+- A `Scaffold`.
+- Bottom navigation.
+- A basic utility screen.
+- A settings screen.
+
+World Engine keeps the same basic app structure, but replaces the starter utility screen with the
+Image Generation utility and expands the navigation into three top-level sections:
+
+- Image Generation
+- Worlds
+- Settings
+
+Navigation is handled through a Compose `NavHost`, allowing the Worlds section to open deeper screens
+such as world details and character editing.
+
+## Architecture and Implementation
+
+World Engine uses a pragmatic MVVM architecture with repositories separating UI state from data
+access.
+
+
+UI (Jetpack Compose + Material 3)
+  -> ViewModel (StateFlow UI state)
+    -> Repository interface
+      -> Data sources
+
+
+Main technologies used:
+
+- Kotlin
+- Jetpack Compose
+- Material Design 3
+- Android ViewModel
+- Kotlin Coroutines and StateFlow
+- Repository pattern
+- Koin dependency injection
+- Room database
+- DataStore preferences
+- EncryptedSharedPreferences
+- Retrofit and OkHttp
+- kotlinx.serialization
+- Coil image loading
+- NovelAI image generation API
+
+## Data Storage
+
+Worldbuilding data is stored locally using Room. This includes worlds, characters, timeline events,
+relationships, lore categories, lore entries, and lore links.
+
+Generated images are stored as local PNG files in app storage. The gallery scans these files, groups
+them by folder, and allows moving, deleting, and exporting them.
+
+## Networking
+
+The app uses Retrofit and OkHttp to connect to the NovelAI image generation API. NovelAI returns image
+results as a ZIP archive, so the app extracts the first PNG image and saves it locally.
+
+The user's API key is entered in Settings and injected into API requests through an authentication
+interceptor. I also intend to support other image generation API's if possible in the future.
+
+## Build and Run
+
+The project targets:
+
+- minSdk 26
+- targetSdk 36
+
+Open the project in Android Studio and run it on an emulator or Android device.
+
+Command line build:
 
 ```powershell
-# Android Studio uses its bundled JBR automatically. For the command line:
-$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 ./gradlew :app:assembleDebug
 ```
 
-## NovelAI setup
+Run tests:
 
-1. Subscribe to NovelAI and create a **persistent API token** (`pst-...`).
-2. Run the app → **Settings** → paste the token (stored encrypted, never committed).
-3. **Image Lab** → enter a prompt, adjust settings, and **Generate**.
+```powershell
+./gradlew test
+```
+
+## NovelAI Setup
+
+To use image generation:
+
+1. Create or obtain a NovelAI persistent API token. (I recommend having
+2. an opus plan, as it can provide you unlimited generations as long as you stay within 1K resolution
+3. and 28 steps. The provided key is an Opus plan key)
+2. Open the app.
+3. Go to Settings.
+4. Paste the API token.
+5. Return to Image Generation and generate an image.
+
+If no API key is saved, the app shows a message asking the user to add one in Settings.
+
+## MVP Scope
+
+The assignment-facing MVP is the image generation utility:
+
+- Generate images.
+- Configure generation settings.
+- Store generated images locally.
+- Manage image folders.
+- View generated images in a gallery.
+- Move, delete, and export images.
+- Use generated images as character portraits.
+
+The broader worldbuilding tools are included as extra exploration and future-facing development.
+
+## Notes and AI Acknowledgement
+
+This app was developed as an individual assignment project for CP3406/CP5307. The project extends the
+provided JCU starter template and uses external libraries and APIs listed above.
+
+Generative AI assistance was used during development as a support tool for brainstorming, debugging,
+code review, wording, and documentation drafting. Final design decisions, code changes, testing, and
+submission responsibility remain my own.
+
+Suggested APA-style reference for the GenAI tool used:
+
+OpenAI. (2026). *ChatGPT* [Large language model]. https://chatgpt.com
+Anthropic. (2026) *Claude* [Large Language model] https://claude.ai
+
+I do intend to implement the future features and maybe port to IOs (I have an IOs) so the current
+repository may be subject to change (Though possibly i will just fork this one)
